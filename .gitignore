@@ -37,3 +37,9 @@ htmlcov/
 
 # Local conversation history
 /sessions/
+
+# Local files used for tool experiments
+/hello.txt
+/edit_demo.txt
+/Happy-LLM-0727.pdf
+/IR-COT.pdf

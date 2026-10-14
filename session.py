@@ -14,3 +14,18 @@ class QueryEngine:
     def load_messages(self, session_id: str) -> list[ChatCompletionMessageParam]:
         with open(self.session_dir / f"{session_id}_messages.json", "r", encoding="utf-8") as f:
             return json.load(f)
+
+
+def get_updated_time(file: Path) -> float:
+    return file.stat().st_mtime
+
+
+def list_sessions(session_dir: str) -> list[str]:
+    directory = Path(session_dir)
+    files = [file for file in directory.glob("*_messages.json") if file.is_file()]
+    files.sort(key=get_updated_time, reverse=True)
+
+    session_ids = []
+    for file in files:
+        session_ids.append(file.name.removesuffix("_messages.json"))
+    return session_ids

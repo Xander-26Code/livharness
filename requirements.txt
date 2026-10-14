@@ -1,0 +1,3 @@
+openai>=2.31,<3
+python-dotenv>=1.1,<2
+pypdf>=6,<7
