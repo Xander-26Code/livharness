@@ -21,7 +21,7 @@ def list_files(directory: str) -> str:
     for item in path.iterdir():
         if item.is_file():
             name.append(f"[file] {item.name}")
-        else:
+        elif item.is_dir():
             name.append(f"[dir] {item.name}")
 
     return "\n".join(name) if name else f"No files found in directory {directory}."

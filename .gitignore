@@ -1,0 +1,36 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables and API keys
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Build and test artifacts
+build/
+dist/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local editor and macOS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Runtime logs
+*.log
