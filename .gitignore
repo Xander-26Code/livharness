@@ -34,3 +34,6 @@ htmlcov/
 
 # Runtime logs
 *.log
+
+# Local conversation history
+/sessions/

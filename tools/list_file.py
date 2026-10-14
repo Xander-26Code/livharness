@@ -9,6 +9,8 @@ def list_files(directory: str) -> str:
     Returns:
         str: A string containing the list of files, separated by newlines.
     """
+    if not isinstance(directory, str):
+        return "Error: The directory path must be a string."
     path = Path(directory)
     if not path.is_dir():
         return f"Error: The path {directory} is not a valid directory."

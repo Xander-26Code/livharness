@@ -38,8 +38,18 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
                     return
 
                 tool_name = tool_call.function.name
-                arguments = json.loads(tool_call.function.arguments)
-                print("调用工具：", tool_name, "参数：", arguments)
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    result = f"Error: Failed to decode arguments for tool '{tool_name}'."
+                    print(result)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result
+                    })
+                    continue
+                print(f"[工具调用] {tool_name}，参数：{arguments}")
                 function = tool_functions.get(tool_name)
                 if function is None:
                     result = f"Error: Tool '{tool_name}' is not implemented."
@@ -48,12 +58,20 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
                         result = function(**arguments)
                     except TypeError as e:
                         result = f"Error: {str(e)}"
+                if result.startswith("Error:"):
+                    print(result)
+                else:
+                    print(f"[工具调用成功] 返回了 {len(result)} 字节的结果。")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": result
                 })
         else:
-            print(f"Assistant's response:\n{message.content}")
+            messages.append({
+                "role": "assistant",
+                "content": message.content
+            })
+            print("assistant:", message.content)
             return
     print("Error: Maximum steps reached without a final response from the assistant.")
