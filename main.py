@@ -4,6 +4,12 @@ from session import QueryEngine, list_sessions
 from uuid import uuid4
 from datetime import datetime
 from pathlib import Path
+
+
+def show_response(text: str) -> None:
+    print("assistant:", text)
+
+
 def main(resume_id : str | None = None):
     if resume_id is None:
         session_id = uuid4().hex
@@ -49,8 +55,10 @@ def main(resume_id : str | None = None):
             "role": "user",
             "content": user_input
         })
-        run_agent(messages)
+        status = run_agent(messages, on_response=show_response)
         session.save_messages(messages)
+        if status == "max_steps":
+            print("[System] Already hit the maximum number of steps for this session.")
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()

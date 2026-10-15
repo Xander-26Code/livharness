@@ -10,9 +10,65 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
+from tool_result import ToolResult
 
 
 class TestAgentLoop(unittest.TestCase):
+    def test_callback_and_messages_at_step_limit(self):
+        # 分别验证：工具后正常回答、第10轮回答、10轮都调用工具。
+        for tool_rounds, final_text in [(1, "读取完成"), (9, "读取完成"), (10, None)]:
+            with self.subTest(tool_rounds=tool_rounds):
+                replies = []
+                for index in range(tool_rounds):
+                    replies.append(ChatCompletionMessage.model_validate({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": f"call_{index}",
+                            "type": "function",
+                            "function": {"name": "read_file", "arguments": '{"file_path":"demo.txt"}'},
+                        }],
+                    }))
+                if final_text is not None:
+                    replies.append(ChatCompletionMessage(role="assistant", content=final_text))
+
+                messages = [{"role": "user", "content": "读取文件"}]
+                on_response = Mock()
+                read_file = Mock(return_value=ToolResult(
+                    tool="read_file", status="success", summary="读取成功", data={"content": "hello"},
+                ))
+                agent_path = Path(__file__).resolve().parents[1] / "agent_loop.py"
+                with (
+                    patch("dotenv.load_dotenv"),
+                    patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test-only-key"}),
+                    patch("openai.OpenAI") as client_class,
+                    redirect_stdout(StringIO()),
+                ):
+                    create = client_class.return_value.chat.completions.create
+                    create.side_effect = [
+                        SimpleNamespace(choices=[SimpleNamespace(message=reply)]) for reply in replies
+                    ]
+                    agent = runpy.run_path(str(agent_path))
+                    with patch.dict(agent["tool_functions"], {"read_file": read_file}):
+                        status = agent["run_agent"](messages, on_response=on_response)
+
+                self.assertEqual(create.call_count, len(replies))
+                self.assertEqual(read_file.call_count, tool_rounds)
+                tool_messages = [item for item in messages if item["role"] == "tool"]
+                self.assertEqual(len(tool_messages), tool_rounds)
+                for index, item in enumerate(tool_messages):
+                    self.assertEqual(item["tool_call_id"], f"call_{index}")
+                    self.assertEqual(json.loads(item["content"])["data"], {"content": "hello"})
+                if final_text is None:
+                    self.assertEqual(status, "max_steps")
+                    self.assertEqual(len(messages), 21)
+                    self.assertEqual(messages[-1]["role"], "tool")
+                    on_response.assert_not_called()
+                else:
+                    self.assertEqual(status, "completed")
+                    self.assertEqual(messages[-1], {"role": "assistant", "content": final_text})
+                    on_response.assert_called_once_with(final_text)
+
     def test_invalid_json_returns_error_without_running_tool(self):
         # 1. 模拟第一轮：模型请求读取文件，但参数缺少 JSON 值。
         tool_request = ChatCompletionMessage.model_validate({

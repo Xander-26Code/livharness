@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import cast
+from typing import cast, Callable
 
 from tools import tool_functions, tools
 
@@ -16,7 +16,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 client = OpenAI(
     api_key=os.environ["DEEPSEEK_API_KEY"],
     base_url="https://api.deepseek.com")
-def run_agent(messages: list[ChatCompletionMessageParam]):
+def run_agent(messages: list[ChatCompletionMessageParam], on_response: Callable[[str], None] = print) -> str:
     for step in range(10):
         response = client.chat.completions.create(
         model="deepseek-flash",
@@ -35,7 +35,7 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
             for tool_call in message.tool_calls:
                 if tool_call.type != "function":
                     print("暂时不支持非函数调用")
-                    return
+                    return "unsupported_tool"
 
                 tool_name = tool_call.function.name
                 try:
@@ -102,6 +102,6 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
                 "role": "assistant",
                 "content": message.content
             })
-            print("assistant:", message.content)
-            return
-    print("Error: Maximum steps reached without a final response from the assistant.")
+            on_response(message.content or "")
+            return "completed"
+    return "max_steps"
