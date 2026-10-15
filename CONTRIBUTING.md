@@ -4,7 +4,7 @@
 
 代码、文档、测试、失败案例和设计反馈都欢迎。贡献应能说明解决了什么问题，以及怎样判断改动有效。
 
-[项目介绍与启动方式](README.md#快速开始) · [版本路线图](README.md#版本路线图) · [提交 Issue](https://github.com/Xander-26Code/livharness/issues)
+[项目介绍与启动方式](README_ZH.md#快速开始) · [版本路线图](README_ZH.md#版本路线图) · [提交 Issue](https://github.com/Xander-26Code/livharness/issues)
 
 ## 从哪里开始
 
@@ -63,7 +63,7 @@
 ## 开发流程
 
 1. Fork 仓库，并把自己的 Fork 克隆到本地。
-2. 按 [README](README.md#快速开始) 创建虚拟环境、安装依赖和配置本地 `.env`。
+2. 按 [README](README_ZH.md#快速开始) 创建虚拟环境、安装依赖和配置本地 `.env`。
 3. 创建聚焦本次改动的分支。
 
 ```bash
