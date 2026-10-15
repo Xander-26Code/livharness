@@ -8,6 +8,8 @@ This file records implemented changes. No formal version has been released yet, 
 
 ### Added
 
+- A session save/load test and an agent-loop test using a mocked model client. Invalid tool-call JSON must return a structured error with the correct call ID to the next model request, without executing the tool.
+- Two `unittest` cases for file editing: replacing a unique match without changing surrounding text, and rejecting duplicate matches without modifying the file. Tests use temporary files and do not call a model.
 - A basic model-and-tool loop using DeepSeek through the OpenAI Python SDK.
 - Tools for reading, listing, finding, and editing text files, plus PDF text extraction.
 - Conversation saving and loading, random session IDs, and a session list sorted by most recent update.
@@ -30,6 +32,8 @@ The terminal UI, structured tool results, task verification, and state-aware con
 
 #### 新增
 
+- 会话保存加载测试，以及使用模拟模型客户端的主循环测试：工具参数 JSON 错误时，不执行工具，并把带有正确调用 ID 的结构化错误交给下一轮模型请求。
+- 两个基于 `unittest` 的文件编辑测试：正常替换唯一匹配且保留其他内容，以及原文重复时拒绝修改并保持文件原样。使用临时文件，不调用模型。
 - 通过 OpenAI Python SDK 调用 DeepSeek 的基础模型与工具循环。
 - 文本读取、目录浏览、文件查找、文本编辑和 PDF 文字提取工具。
 - 对话保存与加载、随机会话 ID，以及按最近更新时间排序的会话列表。

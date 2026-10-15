@@ -44,7 +44,7 @@ Each version has a concrete set of features to deliver. These are development ta
 
 | Version | Focus | Planned features | Status |
 | --- | --- | --- | --- |
-| **v0.1** | Basic harness | Model calls, tool registration and execution, file tools, conversation history, session saving and loading | Prototype available; tests still needed |
+| **v0.1** | Basic harness | Model calls, tool registration and execution, file tools, conversation history, session saving and loading | Prototype available; initial editing tests added, broader tests still needed |
 | **v0.2** | Terminal interface and tool results | An interactive terminal UI (TUI) with separate views for conversation, tool calls, and status; structured tool results with success/failure, content, and error details | Planned |
 | **v0.3** | Check the work | Check conditions before important actions, verify results afterward, and record what passed, failed, or remains unverified | Planned |
 | **v0.4** | Stay on track | Follow updated goals, preserve constraints and unresolved errors, refresh outdated file information, and reduce unnecessary history | Planned |
@@ -115,7 +115,13 @@ Help us build one small, working improvement at a time:
 - **Checking work:** Help define what success means and how to check it.
 - **Context:** Create cases where the agent must follow a new requirement, remember a constraint, or notice a changed file.
 
-There is no automated test suite or CI yet; building them is part of v0.1. The code starts in [main.py](main.py), the agent loop is in [agent_loop.py](agent_loop.py), and tools live in [tools/](tools/).
+Four initial tests cover text replacement, rejecting duplicate matches, saving and loading a session, and returning a structured error for invalid tool-call JSON without executing the tool. After installing the project dependencies, run them from the repository root; no API key or real model calls are needed:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Broader tool and session tests, along with CI, are still needed. The code starts in [main.py](main.py), the agent loop is in [agent_loop.py](agent_loop.py), and tools live in [tools/](tools/).
 
 Open an [Issue](https://github.com/Xander-26Code/livharness/issues) to discuss an idea, or read the [contribution guide (Chinese)](CONTRIBUTING.md) for the development and PR workflow. English and Chinese contributions are welcome, including from beginners.
 

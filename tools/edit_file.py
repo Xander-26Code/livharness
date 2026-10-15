@@ -1,15 +1,44 @@
 from pathlib import Path
+from tool_result import ToolError, ToolResult
 
-
-def edit_file(file_path: str, old_text: str, new_text: str) -> str:
+def edit_file(file_path: str, old_text: str, new_text: str) -> ToolResult:
     if not isinstance(file_path, str):
-        return "Error: file_path 必须是字符串。"
-
+        return ToolResult(
+            tool="edit_file",
+            status="error",
+            summary="Invalid file path",
+            data={},
+            error=ToolError(
+                code="INVALID_FILE_PATH",
+                message="The file path must be a string.",
+                retryable=False
+            )
+        )
     if not isinstance(old_text, str) or not isinstance(new_text, str):
-        return "Error: old_text 和 new_text 必须是字符串。"
+        return ToolResult(
+            tool="edit_file",
+            status="error",
+            summary="Invalid text",
+            data={},
+            error=ToolError(
+                code="INVALID_TEXT",
+                message="The old_text and new_text must be strings.",
+                retryable=False
+            )
+        )
 
     if not old_text:
-        return "Error: old_text 不能为空。"
+        return ToolResult(
+            tool="edit_file",
+            status="error",
+            summary="Empty old text",
+            data={},
+            error=ToolError(
+                code="EMPTY_OLD_TEXT",
+                message="The old_text cannot be empty.",
+                retryable=False
+            )
+        )
 
     path = Path(file_path)
 
@@ -20,17 +49,53 @@ def edit_file(file_path: str, old_text: str, new_text: str) -> str:
         count = content.count(old_text)
 
         if count == 0:
-            return "Error: 没有找到要替换的原文，请先重新读取文件。"
+            return ToolResult(
+                tool="edit_file",
+                status="error",
+                summary="Text not found",
+                data={},
+                error=ToolError(
+                    code="TEXT_NOT_FOUND",
+                    message="The text to be replaced was not found in the file.",
+                    retryable=False
+                )
+            )
 
         if count > 1:
-            return "Error: 原文出现多次，请提供更长的原文以确定修改位置。"
+            return ToolResult(
+                tool="edit_file",
+                status="error",
+                summary="Text appears multiple times",
+                data={},
+                error=ToolError(
+                    code="TEXT_MULTIPLE_TIMES",
+                    message="The text to be replaced appears multiple times in the file. Please provide more context to specify which instance to replace.",
+                    retryable=False
+                )
+            )
 
         updated_content = content.replace(old_text, new_text, 1)
 
         with open(path, "w", encoding="utf-8", newline="") as file:
             file.write(updated_content)
 
-        return f"已修改文件：{file_path}"
+        return ToolResult(
+            tool="edit_file",
+            status="success",
+            summary="File edited successfully",
+            data={"file_path": file_path},
+            error=None
+        )
 
     except (OSError, UnicodeError) as error:
-        return f"Error: 无法编辑文件：{error}"
+        return ToolResult(
+            tool="edit_file",
+            status="error",
+            summary="File operation error",
+            data={},
+            error=ToolError(
+                code="FILE_OPERATION_ERROR",
+                message=f"An error occurred while accessing the file: {str(error)}",
+                retryable=False
+            )
+        )

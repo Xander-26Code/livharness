@@ -4,7 +4,7 @@ from typing import cast
 
 from tools import tool_functions, tools
 
-
+from tool_result import ToolError, ToolResult
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -41,8 +41,19 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
                 try:
                     arguments = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
-                    result = f"Error: Failed to decode arguments for tool '{tool_name}'."
-                    print(result)
+                    result = ToolResult(
+                        tool=tool_name,
+                        status="error",
+                        summary="Invalid JSON arguments",
+                        data={},
+                        error=ToolError(
+                            code="INVALID_JSON_ARGUMENTS",
+                            message=f"The arguments for tool '{tool_name}' are not valid JSON.",
+                            retryable=False
+                        ),
+                    )
+                    result_text = result.to_dict()
+                    result = json.dumps(result_text, ensure_ascii=False, indent=2)
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
@@ -52,16 +63,35 @@ def run_agent(messages: list[ChatCompletionMessageParam]):
                 print(f"[工具调用] {tool_name}，参数：{arguments}")
                 function = tool_functions.get(tool_name)
                 if function is None:
-                    result = f"Error: Tool '{tool_name}' is not implemented."
+                    result = ToolResult(
+                        tool=tool_name,
+                        status="error",
+                        summary="Tool not found",
+                        data={},
+                        error=ToolError(
+                            code="TOOL_NOT_FOUND",
+                            message=f"The tool '{tool_name}' was not found.",
+                            retryable=False
+                        ),
+                    )
                 else:
                     try:
                         result = function(**arguments)
                     except TypeError as e:
-                        result = f"Error: {str(e)}"
-                if result.startswith("Error:"):
-                    print(result)
-                else:
-                    print(f"[工具调用成功] 返回了 {len(result)} 字节的结果。")
+                        result = ToolResult(
+                            tool=tool_name,
+                            status="error",
+                            summary="Tool call raised a TypeError",
+                            data={},
+                            error=ToolError(
+                                code="TOOL_TYPE_ERROR",
+                                message=f"Tool '{tool_name}' raised TypeError: {e}",
+                                retryable=False
+                            ),
+                        )
+                result_text = result.to_dict()
+                result = json.dumps(result_text, ensure_ascii=False, indent=2)
+                print(f"[工具结果] {result_text}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
