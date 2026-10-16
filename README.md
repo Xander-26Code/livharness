@@ -8,7 +8,7 @@
 
 LivHarness is a small Python project that connects a language model to tools and manages how it carries out a task.
 
-> **Early development.** Today, it can use basic file tools and save conversations. The two goals below are what we are building toward.
+> **Early development · v0.2 core features complete, not yet released.** The project now has a streaming terminal UI, structured tool results, file tools, and saved conversations. The two goals below are what we are building toward.
 
 ## What We Want to Build
 
@@ -37,10 +37,10 @@ The current prototype can:
 - Edit a file by replacing a unique text match.
 - Extract text from PDFs using `pypdf` (no OCR or image understanding).
 - Save conversations, load previous sessions, and list recent sessions.
-- Use a scrolling terminal interface with Markdown answers, tool status, editable input, and session commands.
+- Read answers as they arrive in a scrolling terminal interface, with Markdown formatting, tool status, editable input, and session commands.
 - Inspect structured tool results, stop a turn with Ctrl+C, and retain recorded progress at the 10-request limit.
 
-The two capabilities above are still planned. Session loading currently restores saved messages, not the exact state of an interrupted task.
+Verified Agent Execution and State-Aware Context Engineering are still planned. A successful tool result is not independent verification that the whole task is complete. Session loading restores saved messages, not the exact state of an interrupted task.
 
 ## Roadmap
 
@@ -48,13 +48,13 @@ Each version has a concrete set of features to deliver. These are development ta
 
 | Version | Focus | Planned features | Status |
 | --- | --- | --- | --- |
-| **v0.1** | Basic harness | Model calls, tool registration and execution, file tools, conversation history, session saving and loading | Prototype available; initial editing tests added, broader tests still needed |
-| **v0.2** | Terminal interface and tool results | An interactive terminal UI (TUI) with separate views for conversation, tool calls, and status; structured tool results with success/failure, content, and error details | Initial implementation; not released |
+| **v0.1** | Basic harness | Model calls, tool registration and execution, file tools, conversation history, session saving and loading | Core features implemented |
+| **v0.2** | Terminal interface and tool results | A scrolling TUI with streaming answers, Markdown, tool logs, session selection, and interruption handling; structured results with success/failure, content, and error details | Core features complete; not yet released |
 | **v0.3** | Check the work | Check conditions before important actions, verify results afterward, and record what passed, failed, or remains unverified | Planned |
 | **v0.4** | Stay on track | Follow updated goals, preserve constraints and unresolved errors, refresh outdated file information, and reduce unnecessary history | Planned |
 | **v1.0** | Bring it together | Combine the interface, tools, verification, and context management for local tasks; add repeatable evaluations and document supported behavior | Planned |
 
-An initial scrolling TUI and structured tool results are implemented toward v0.2. Answers currently appear when a model response completes; token streaming is not implemented. Crash recovery remains a later improvement, to be scoped when long tasks such as batch processing need it.
+The v0.2 milestone is complete; the next development target is v0.3: checking task results. The project is still experimental, and broader tests and terminal compatibility checks are welcome. Reliable crash recovery remains a later improvement, to be scoped when long tasks such as batch processing need it.
 
 We plan to compare versions on the same tasks and model, measuring actual success, incorrect completion claims, adherence to updated requirements, time, and token usage. There are no benchmark results yet.
 
@@ -118,6 +118,8 @@ Try: `Read tools/read_file.py and explain what it does.`
 
 The interface is in English; conversation content keeps its original language. Type commands at the `❯` prompt. Enter sends; Ctrl+J (or Esc then Enter) inserts a newline; arrow keys browse input history; Tab completes commands. Ctrl+C cancels input or stops the running turn. Stopping does not undo file changes, and a tool with no recorded result must be checked before retrying.
 
+Answers appear as text arrives, including in `--plain` mode. Thinking mode is currently enabled: there may be a wait before answer text starts, and reasoning text is not displayed. In the regular TUI, long answers preview their latest lines while streaming; the complete Markdown answer remains in scrollback afterward. If generation stops early, visible partial text is marked incomplete and is not saved as a completed assistant reply.
+
 Only model requests require an API key. Help, the demo, and session commands work offline. The UI lives in [tui/](tui/); it receives responses and progress through callbacks from the agent loop.
 
 ![Offline terminal UI preview](asset/tui-preview.svg)
@@ -129,11 +131,11 @@ Only model requests require an API key. Help, the demo, and session commands wor
 Help us build one small, working improvement at a time:
 
 - **Getting started:** Improve documentation, report a reproducible bug, or add a file-tool test.
-- **v0.2:** Help build the terminal interface or define a consistent tool-result format.
-- **Checking work:** Help define what success means and how to check it.
+- **Terminal experience:** Test streaming, long answers, and interruption in different terminals; improve tool-result presentation.
+- **v0.3 — Checking work:** Help define what success means and how to check it.
 - **Context:** Create cases where the agent must follow a new requirement, remember a constraint, or notice a changed file.
 
-Tests cover editing, sessions, invalid tool-call JSON, the model-call limit, input handling, session commands, and interrupted tool calls. After installing the project dependencies, run them from the repository root; no API key or real model calls are needed:
+The current suite has 21 automated tests covering editing, sessions, invalid tool-call JSON, the model-call limit, streaming text and tool parameters, truncated responses, and TUI input, display, and interruption. After installing the project dependencies, run them from the repository root; no API key or real model calls are needed:
 
 ```bash
 python -m unittest discover -s tests -v

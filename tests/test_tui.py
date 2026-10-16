@@ -21,6 +21,86 @@ from tui.render import TerminalUI
 
 
 class TestTerminalUI(unittest.TestCase):
+    def test_stream_is_visible_immediately_and_final_answer_is_not_duplicated(self):
+        for plain in (True, False):
+            with self.subTest(plain=plain):
+                output = StringIO()
+                ui = TerminalUI(console=Console(file=output, width=80, color_system=None), plain=plain)
+                with ui.working():
+                    ui.event('model_start', {'step': 1, 'max_steps': 10})
+                    ui.event('text_delta', {'text': 'Hello '})
+                    self.assertIn('Hello ', output.getvalue())
+                    ui.event('text_delta', {'text': '[red]世界[/red]'})
+                    ui.event('model_end', {'has_tool_calls': False})
+                    ui.response('Hello [red]世界[/red]')
+                text = output.getvalue()
+                self.assertEqual(text.count('● Liv'), 1)
+                self.assertEqual(text.count('Hello [red]世界[/red]'), 1)
+                self.assertNotIn('Partial response', text)
+                self.assertNotIn('\x1b', text)
+
+    def test_streamed_tool_preamble_finishes_before_tool_log_and_next_answer(self):
+        output = StringIO()
+        ui = TerminalUI(console=Console(file=output, color_system=None), plain=True)
+        with ui.working():
+            ui.event('model_start', {'step': 1, 'max_steps': 10})
+            ui.event('text_delta', {'text': 'Reading now.'})
+            ui.event('model_end', {'has_tool_calls': True})
+            ui.event('tool_start', {'tool': 'read_file', 'arguments': {'file_path': 'hello.txt'}})
+            ui.event('tool_result', {'tool': 'read_file', 'status': 'success', 'summary': 'File read', 'data': {}})
+            ui.event('model_start', {'step': 2, 'max_steps': 10})
+            ui.event('text_delta', {'text': 'The file says hello.'})
+            ui.event('model_end', {'has_tool_calls': False})
+            ui.response('The file says hello.')
+        text = output.getvalue()
+        self.assertEqual(text.count('● Liv'), 2)
+        self.assertEqual(text.count('Reading now.'), 1)
+        self.assertEqual(text.count('The file says hello.'), 1)
+        self.assertLess(text.index('Reading now.'), text.index('↳ read_file'))
+        self.assertLess(text.index('File read'), text.index('The file says hello.'))
+
+    def test_cancelled_or_failed_stream_keeps_partial_text_and_allows_next_turn(self):
+        for error in (KeyboardInterrupt, RuntimeError):
+            with self.subTest(error=error):
+                output = StringIO()
+                ui = TerminalUI(console=Console(file=output, color_system=None), plain=True)
+                with self.assertRaises(error):
+                    with ui.working():
+                        ui.event('text_delta', {'text': 'Unfinished text'})
+                        raise error()
+                with ui.working():
+                    ui.event('text_delta', {'text': 'Next answer'})
+                    ui.response('Next answer')
+                text = output.getvalue()
+                self.assertEqual(text.count('Unfinished text'), 1)
+                self.assertEqual(text.count('Partial response'), 1)
+                self.assertEqual(text.count('Next answer'), 1)
+                self.assertFalse(ui._stream_active)
+
+    def test_live_stream_cleanup_and_full_long_answer_are_preserved(self):
+        for width in (40, 100):
+            with self.subTest(width=width):
+                output = StringIO()
+                console = Console(file=output, width=width, height=12, force_terminal=True, color_system=None)
+                ui = TerminalUI(console=console)
+                answer = '\n'.join(f'line-{index:03d}' for index in range(40))
+                with ui.working():
+                    ui.event('text_delta', {'text': answer})
+                    self.assertIsNotNone(ui._stream_live)
+                    with console.capture() as preview:
+                        console.print(ui._stream_preview())
+                    self.assertIn('line-039', preview.get())
+                    self.assertNotIn('line-000', preview.get())
+                    ui.response(answer)
+                # 实际 Rich Live 的控制码只出现在终端模式；最后完整答案仍保留。
+                text = output.getvalue()
+                for index in range(40):
+                    self.assertIn(f'line-{index:03d}', text)
+                self.assertIsNone(ui._stream_live)
+                self.assertIsNone(ui._status)
+                self.assertFalse(ui._stream_active)
+                self.assertFalse(console._live_stack)
+
     def test_session_titles_and_unreadable_files(self):
         self.assertEqual(get_session_title([]), "New conversation")
         self.assertEqual(get_session_title([

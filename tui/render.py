@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rich import box
 from rich.console import Console, Group
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.padding import Padding
 from rich.panel import Panel
@@ -32,6 +33,58 @@ class TerminalUI:
         self.steps = 0
         self.tool_count = 0
         self._status: Status | None = None
+        self._stream_live: Live | None = None
+        self._stream_text = ""
+        self._stream_active = False
+
+    def _stream_preview(self):
+        """长回答只预览末尾，结束后完整排版写入终端滚动历史。"""
+        lines = Text(self._stream_text).wrap(self.console, max(1, self.console.width - 4))
+        available = max(1, self.console.height - 5)
+        if len(lines) > available:
+            tail = Text("\n").join(lines[-available:])
+            return Group(Text("  … earlier text will appear when complete", style="muted"), Padding(tail, (0, 2)))
+        return Padding(Markdown(self._stream_text, code_theme="monokai"), (0, 2))
+
+    def text_delta(self, text: str) -> None:
+        if not text:
+            return
+        if not self._stream_active:
+            if self._status:
+                self._status.stop()
+            self._stream_active = True
+            self._stream_text = ""
+            self.console.print(Text("● Liv", style="bold accent"))
+            if self.console.is_terminal and not self.plain:
+                self._stream_live = Live(
+                    Text(""), console=self.console, transient=True,
+                    refresh_per_second=12, redirect_stdout=False, redirect_stderr=False,
+                )
+                self._stream_live.start()
+            else:
+                self.console.print("  ", end="")
+        self._stream_text += text
+        if self._stream_live:
+            self._stream_live.update(self._stream_preview())
+        else:
+            # 管道和 --plain 模式直接追加，不输出光标控制码、不重复打印全文。
+            self.console.print(Text(text), end="", soft_wrap=True)
+
+    def _finish_stream(self, incomplete: bool = False) -> None:
+        if not self._stream_active:
+            return
+        if self._stream_live:
+            self._stream_live.stop()
+            self._stream_live = None
+            body = Text(self._stream_text) if incomplete else Markdown(self._stream_text, code_theme="monokai")
+            self.console.print(Padding(body, (0, 2)))
+        elif not self._stream_text.endswith("\n"):
+            self.console.print()
+        self.console.print()
+        self._stream_active = False
+        self._stream_text = ""
+        if incomplete:
+            self.notice("Partial response · generation did not complete. This text was not saved as a completed reply.", "warn")
 
     def welcome(self, session_id: str, model: str, resumed: bool = False) -> None:
         logo = Text("  ▝▚           \n", style="spark")
@@ -64,6 +117,9 @@ class TerminalUI:
     def response(self, text: str) -> None:
         if self._status:
             self._status.stop()
+        if self._stream_active:
+            self._finish_stream()
+            return
         self.console.print(Text("● Liv", style="bold accent"))
         if text:
             body = Text(text) if self.plain else Markdown(text, code_theme="monokai")
@@ -85,6 +141,7 @@ class TerminalUI:
         try:
             yield
         finally:
+            self._finish_stream(incomplete=True)
             if self._status:
                 self._status.stop()
                 self._status = None
@@ -95,6 +152,12 @@ class TerminalUI:
             label = Text(f"Working  ·  step {self.steps}/{data['max_steps']}  ·  Ctrl+C to stop", style="muted")
             if self._status:
                 self._status.update(label)
+                self._status.start()
+        elif name == "text_delta":
+            self.text_delta(data["text"])
+        elif name == "model_end":
+            if data["has_tool_calls"]:
+                self._finish_stream()
         elif name == "tool_start":
             self.tool_count += 1
             arguments = json.dumps(data["arguments"], ensure_ascii=False)
@@ -105,6 +168,7 @@ class TerminalUI:
             self.console.print(row)
             if self._status:
                 self._status.update(Text(f"Running {data['tool']}  ·  Ctrl+C to stop", style="muted"))
+                self._status.start()
         elif name == "tool_result":
             ok = data["status"] == "success"
             summary = " ".join(str(data["summary"]).split())[:180]

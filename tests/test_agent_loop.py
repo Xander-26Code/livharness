@@ -6,11 +6,39 @@ from contextlib import redirect_stdout
 from copy import deepcopy
 from io import StringIO
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
-from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
+from openai.types.chat import ChatCompletionChunk, ChatCompletionMessage, ChatCompletionMessageParam
 from tool_result import ToolResult
+
+
+def make_chunk(delta, finish_reason=None):
+    return ChatCompletionChunk.model_validate({
+        "id": "test", "object": "chat.completion.chunk", "created": 0, "model": "test",
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    })
+
+
+def fake_stream(chunks):
+    stream = MagicMock()
+    stream.__enter__.return_value = stream
+    stream.__iter__.side_effect = lambda: iter(chunks)
+    return stream
+
+
+def stream_reply(reply):
+    chunks = [make_chunk({"role": "assistant", "content": None})]
+    for char in reply.content or "":
+        chunks.append(make_chunk({"content": char}))
+    for index, call in enumerate(reply.tool_calls or []):
+        chunks.append(make_chunk({"tool_calls": [{
+            "index": index, "id": call.id, "type": "function",
+            "function": {"name": call.function.name, "arguments": ""},
+        }]}))
+        for char in call.function.arguments:
+            chunks.append(make_chunk({"tool_calls": [{"index": index, "function": {"arguments": char}}]}))
+    chunks.append(make_chunk({}, "tool_calls" if reply.tool_calls else "stop"))
+    return fake_stream(chunks)
 
 
 class TestAgentLoop(unittest.TestCase):
@@ -47,7 +75,7 @@ class TestAgentLoop(unittest.TestCase):
                 ):
                     create = client_class.return_value.chat.completions.create
                     create.side_effect = [
-                        SimpleNamespace(choices=[SimpleNamespace(message=reply)]) for reply in replies
+                        stream_reply(reply) for reply in replies
                     ]
                     agent = runpy.run_path(str(agent_path))
                     with patch.dict(agent["tool_functions"], {"read_file": read_file}):
@@ -75,7 +103,7 @@ class TestAgentLoop(unittest.TestCase):
                     on_response.assert_not_called()
                 else:
                     self.assertEqual(status, "completed")
-                    self.assertEqual(messages[-1], {"role": "assistant", "content": final_text})
+                    self.assertEqual(messages[-1], {"role": "assistant", "content": final_text, "reasoning_content": ""})
                     on_response.assert_called_once_with(final_text)
 
     def test_invalid_json_returns_error_without_running_tool(self):
@@ -97,8 +125,8 @@ class TestAgentLoop(unittest.TestCase):
             content="参数格式错误，需要修正。",
         )
         responses = iter([
-            SimpleNamespace(choices=[SimpleNamespace(message=tool_request)]),
-            SimpleNamespace(choices=[SimpleNamespace(message=final_answer)]),
+            stream_reply(tool_request),
+            stream_reply(final_answer),
         ])
         requests = []
 
@@ -143,4 +171,49 @@ class TestAgentLoop(unittest.TestCase):
         self.assertEqual(messages[-1], {
             "role": "assistant",
             "content": "参数格式错误，需要修正。",
+            "reasoning_content": "",
         })
+
+    def test_text_events_arrive_before_stream_finishes_and_hide_reasoning(self):
+        import agent_loop
+        events = []
+        final = Mock()
+
+        def chunks():
+            yield make_chunk({"reasoning_content": "private reasoning"})
+            yield make_chunk({"content": "你好"})
+            self.assertIn(("text_delta", {"text": "你好"}), events)
+            final.assert_not_called()
+            yield make_chunk({"content": "世界"})
+            yield make_chunk({}, "stop")
+
+        stream = fake_stream(chunks())
+        api = Mock()
+        api.chat.completions.create.return_value = stream
+        messages = [{"role": "user", "content": "hello"}]
+        with patch.object(agent_loop, "get_client", return_value=api):
+            self.assertEqual(agent_loop.run_agent(messages, final, lambda name, data: events.append((name, data))), "completed")
+        final.assert_called_once_with("你好世界")
+        self.assertEqual(messages[-1]["reasoning_content"], "private reasoning")
+        self.assertNotIn("private reasoning", str(events))
+        self.assertEqual(events[-1], ("model_end", {"has_tool_calls": False}))
+        stream.__exit__.assert_called_once()
+
+    def test_truncated_tool_request_never_executes_or_emits_model_end(self):
+        import agent_loop
+        stream = fake_stream([
+            make_chunk({"tool_calls": [{"index": 0, "id": "call_x", "type": "function", "function": {"name": "read_file", "arguments": '{"file_path":"hello.txt"}'}}]}),
+            make_chunk({}, "length"),
+        ])
+        api = Mock()
+        api.chat.completions.create.return_value = stream
+        tool = Mock()
+        events = []
+        messages = [{"role": "user", "content": "read"}]
+        with patch.object(agent_loop, "get_client", return_value=api), patch.dict(agent_loop.tool_functions, {"read_file": tool}):
+            with self.assertRaises(RuntimeError):
+                agent_loop.run_agent(messages, on_event=lambda name, data: events.append((name, data)))
+        tool.assert_not_called()
+        self.assertEqual(len(messages), 1)
+        self.assertFalse(any(name == "model_end" for name, _ in events))
+        stream.__exit__.assert_called_once()
