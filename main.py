@@ -1,81 +1,32 @@
-from agent_loop import run_agent
-from openai.types.chat import ChatCompletionMessageParam
-from session import QueryEngine, list_sessions
-from uuid import uuid4
-from datetime import datetime
-from pathlib import Path
+"""命令行入口。终端交互放在 tui/，Agent 循环仍在 agent_loop.py。"""
+
+import argparse
+
+from session import list_sessions
+from tui.app import run_app
+from tui.demo import show_demo
+from tui.render import TerminalUI
 
 
-def show_response(text: str) -> None:
-    print("assistant:", text)
+def main(resume_id: str | None = None, plain: bool = False) -> None:
+    run_app(resume_id=resume_id, plain=plain)
 
 
-def main(resume_id : str | None = None):
-    if resume_id is None:
-        session_id = uuid4().hex
-    else:
-        session_id = resume_id
-
-    session = QueryEngine(
-        session_id=session_id,
-        session_dir="sessions",
-    )
-
-    if resume_id is not None:
-        try:
-            messages: list[ChatCompletionMessageParam] = session.load_messages(resume_id)
-        except FileNotFoundError:
-            print(f"Error: No session found with ID {resume_id}.")
-            return
-    else:
-        messages: list[ChatCompletionMessageParam] = [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant that can read and list files in the local directory."
-            }
-        ]
-        session.save_messages(messages)
-
-    print(f"Session ID: {session_id}")
-   
-    while True:
-        user_input = input("User: ")
-        if user_input.lower() in ["exit", "quit"]:
-            print("Exiting the assistant.")
-            break
-        if user_input == "/clear":
-            del messages[1:]
-            session.save_messages(messages)
-            print("Conversation history cleared.")
-            continue
-        if not user_input:
-            continue
-
-        messages.append({
-            "role": "user",
-            "content": user_input
-        })
-        status = run_agent(messages, on_response=show_response)
-        session.save_messages(messages)
-        if status == "max_steps":
-            print("[System] Already hit the maximum number of steps for this session.")
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--resume", type=str, help="Resume a session with the given session ID.")
-    parser.add_argument("--list-sessions", action="store_true", help="List sessions, most recently updated first.")
+    parser = argparse.ArgumentParser(description="LivHarness — local tools, clear steps.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--resume", metavar="SESSION_ID", help="Continue a saved conversation")
+    mode.add_argument("--list-sessions", action="store_true", help="List sessions, most recently updated first")
+    mode.add_argument("--demo", action="store_true", help="Preview the terminal UI offline; no API calls")
+    parser.add_argument("--plain", action="store_true", help="Use basic input without colors or animations")
     args = parser.parse_args()
-    if args.list_sessions:
-        session_ids = list_sessions("sessions")
-        if not session_ids:
-            print("还没有保存的会话。")
-        else:
-            print("已有会话（最近更新的在前）：")
-            print("更新时间                   会话ID")
-            for session_id in session_ids:
-                session_file = Path("sessions") / f"{session_id}_messages.json"
-                updated_time = datetime.fromtimestamp(session_file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                print(f"{updated_time}    {session_id}")
+    if args.demo:
+        show_demo(TerminalUI(plain=args.plain))
+    elif args.list_sessions:
+        ui = TerminalUI(plain=args.plain)
+        try:
+            ui.sessions(list_sessions("sessions"), "sessions")
+        except OSError as exc:
+            ui.notice(f"无法读取会话列表：{exc}", "bad")
     else:
-        main(resume_id=args.resume)
- 
+        main(resume_id=args.resume, plain=args.plain)

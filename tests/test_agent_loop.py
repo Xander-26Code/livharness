@@ -34,6 +34,7 @@ class TestAgentLoop(unittest.TestCase):
 
                 messages = [{"role": "user", "content": "读取文件"}]
                 on_response = Mock()
+                events = []
                 read_file = Mock(return_value=ToolResult(
                     tool="read_file", status="success", summary="读取成功", data={"content": "hello"},
                 ))
@@ -50,10 +51,18 @@ class TestAgentLoop(unittest.TestCase):
                     ]
                     agent = runpy.run_path(str(agent_path))
                     with patch.dict(agent["tool_functions"], {"read_file": read_file}):
-                        status = agent["run_agent"](messages, on_response=on_response)
+                        status = agent["run_agent"](
+                            messages,
+                            on_response=on_response,
+                            on_event=lambda name, data: events.append((name, data)),
+                        )
 
                 self.assertEqual(create.call_count, len(replies))
                 self.assertEqual(read_file.call_count, tool_rounds)
+                self.assertEqual(sum(name == "model_start" for name, _ in events), len(replies))
+                self.assertEqual(sum(name == "tool_start" for name, _ in events), tool_rounds)
+                self.assertEqual(sum(name == "tool_result" for name, _ in events), tool_rounds)
+                self.assertEqual(events[0], ("model_start", {"step": 1, "max_steps": 10}))
                 tool_messages = [item for item in messages if item["role"] == "tool"]
                 self.assertEqual(len(tool_messages), tool_rounds)
                 for index, item in enumerate(tool_messages):

@@ -1,0 +1,6 @@
+Generated with the built-in image_gen tool.
+Edit target: asset/0001.png
+Output: asset/logo-v2.png
+Transparent background: true
+
+Use case: logo-brand. Edit target: the attached small hand-drawn LivHarness icon. Refine this into one polished, minimal pixel-art logo for an open source terminal agent harness. Preserve the recognizable turquoise/cyan orbital ring, dark hollow center, and tiny coral diagonal spark coming from the upper-left. Keep the icon compact, geometric, charming and readable as a 24x24 pixel sprite: consistent chunky pixel strokes, deliberate symmetry with a small asymmetric spark. One centered icon only, generous transparent margin. The ring can contain a short subtle cyan terminal cursor-like pixel detail. Genuine transparent background, no white background, no typography, no wordmark, no gradients, no glow, no shadows, no mockup. Output one square PNG asset; preserve the cyan-and-coral identity of the original.

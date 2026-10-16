@@ -1,3 +1,5 @@
 openai>=2.31,<3
 python-dotenv>=1.1,<2
 pypdf>=6,<7
+rich>=14,<16
+prompt-toolkit>=3.0.52,<4

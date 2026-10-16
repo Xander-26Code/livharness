@@ -8,33 +8,70 @@ from tool_result import ToolError, ToolResult
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai.types.chat import  ChatCompletionToolParam, ChatCompletionMessageParam
+from openai.types.chat import ChatCompletionMessageParam
 
 
-load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
+MODEL = "deepseek-flash"
+MAX_STEPS = 10
+client: OpenAI | None = None
 
-client = OpenAI(
-    api_key=os.environ["DEEPSEEK_API_KEY"],
-    base_url="https://api.deepseek.com")
-def run_agent(messages: list[ChatCompletionMessageParam], on_response: Callable[[str], None] = print) -> str:
-    for step in range(10):
-        response = client.chat.completions.create(
-        model="deepseek-flash",
-        messages=messages,
-        tools=tools,
-        stream=False,
-        extra_body={"thinking": {"type": "disabled"}}
+
+def get_client() -> OpenAI:
+    """只在发送模型请求时读取配置，帮助、预览和会话列表可以离线使用。"""
+    global client
+    if client is None:
+        load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("请先在项目的 .env 文件中设置 DEEPSEEK_API_KEY。")
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    return client
+
+
+def run_agent(
+    messages: list[ChatCompletionMessageParam],
+    on_response: Callable[[str], None] = print,
+    on_event: Callable[[str, dict], None] | None = None,
+) -> str:
+    """修改同一份 messages；通过回调传递展示内容，返回本轮停止原因。"""
+    def emit(event: str, data: dict) -> None:
+        if on_event is not None:
+            on_event(event, data)
+        elif event == "tool_start":
+            print(f"[工具调用] {data['tool']}，参数：{data['arguments']}")
+        elif event == "tool_result":
+            print(f"[工具结果] {data}")
+
+    def record_result(call_id: str, result: ToolResult) -> None:
+        result_dict = result.to_dict()
+        messages.append({
+            "role": "tool",
+            "tool_call_id": call_id,
+            "content": json.dumps(result_dict, ensure_ascii=False, indent=2),
+        })
+        emit("tool_result", result_dict)
+
+    api = get_client()
+    for step in range(MAX_STEPS):
+        emit("model_start", {"step": step + 1, "max_steps": MAX_STEPS})
+        response = api.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            tools=tools,
+            stream=False,
+            extra_body={"thinking": {"type": "disabled"}},
         )
         message = response.choices[0].message
 
         if message.tool_calls:
-            
+            # 不写入不支持的工具请求，避免留下没有结果的请求。
+            if any(call.type != "function" for call in message.tool_calls):
+                return "unsupported_tool"
             # SDK serialization returns a general dict; identify it as a message for type checking.
             assistant_message = cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))
             messages.append(assistant_message)
             for tool_call in message.tool_calls:
                 if tool_call.type != "function":
-                    print("暂时不支持非函数调用")
                     return "unsupported_tool"
 
                 tool_name = tool_call.function.name
@@ -52,15 +89,9 @@ def run_agent(messages: list[ChatCompletionMessageParam], on_response: Callable[
                             retryable=False
                         ),
                     )
-                    result_text = result.to_dict()
-                    result = json.dumps(result_text, ensure_ascii=False, indent=2)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result
-                    })
+                    record_result(tool_call.id, result)
                     continue
-                print(f"[工具调用] {tool_name}，参数：{arguments}")
+                emit("tool_start", {"tool": tool_name, "arguments": arguments})
                 function = tool_functions.get(tool_name)
                 if function is None:
                     result = ToolResult(
@@ -89,14 +120,7 @@ def run_agent(messages: list[ChatCompletionMessageParam], on_response: Callable[
                                 retryable=False
                             ),
                         )
-                result_text = result.to_dict()
-                result = json.dumps(result_text, ensure_ascii=False, indent=2)
-                print(f"[工具结果] {result_text}")
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result
-                })
+                record_result(tool_call.id, result)
         else:
             messages.append({
                 "role": "assistant",
