@@ -27,6 +27,6 @@ if __name__ == "__main__":
         try:
             ui.sessions(list_sessions("sessions"), "sessions")
         except OSError as exc:
-            ui.notice(f"无法读取会话列表：{exc}", "bad")
+            ui.notice(f"Could not read sessions: {exc}", "bad")
     else:
         main(resume_id=args.resume, plain=args.plain)

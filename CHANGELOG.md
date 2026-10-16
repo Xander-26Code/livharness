@@ -22,6 +22,9 @@ This file records implemented changes. No formal version has been released yet, 
 
 ### Changed
 
+- Standardized terminal prompts, help, and status messages in English; refreshed the README preview.
+- Session lists now show conversation titles and support numbered selection from the last displayed list.
+
 - Simplified the project goals to focus on checking task results and keeping track of current goals and constraints during long tasks.
 - Updated the roadmap: v0.1 covers the basic harness; v0.2 plans a terminal UI and structured tool results, followed by verification and context management.
 
@@ -50,6 +53,9 @@ Task verification and state-aware context management are **not implemented yet**
 - 中英文 README、贡献指南，以及带有 README 跳转入口的独立更新日志。
 
 #### 调整
+
+- 终端提示、帮助和状态信息统一使用英文，并更新 README 预览图。
+- 会话列表显示对话标题，支持按最近展示的列表编号恢复会话。
 
 - 简化项目目标，聚焦任务结果检查，以及在长任务中跟进当前目标和重要限制。
 - 更新版本路线图：v0.1 完成基础 harness，v0.2 计划增加终端界面和结构化工具结果，之后推进结果检查与上下文管理。

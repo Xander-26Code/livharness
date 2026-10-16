@@ -29,3 +29,23 @@ def list_sessions(session_dir: str) -> list[str]:
     for file in files:
         session_ids.append(file.name.removesuffix("_messages.json"))
     return session_ids
+
+def get_session_title(messages: list[ChatCompletionMessageParam]) -> str:
+    for message in messages:
+        if message["role"] != "user":
+            continue
+
+        content = message.get("content")
+        if not isinstance(content, str):
+            continue
+
+        title = " ".join(content.split())
+
+        if not title:
+            continue
+
+        if len(title) > 30:
+            return title[:30] + "..."
+
+        return title
+    return "New conversation"

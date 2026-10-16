@@ -9,9 +9,9 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 
 COMMANDS = {
-    "/help": "帮助", "/new": "新会话", "/sessions": "历史会话",
-    "/resume": "恢复会话 /resume ID", "/session": "当前会话",
-    "/clear": "清空上下文", "/details": "工具结果详情", "/exit": "退出",
+    "/help": "Help", "/new": "New session", "/sessions": "Saved sessions",
+    "/resume": "Resume: /resume NUMBER or ID", "/session": "Current session",
+    "/clear": "Clear context", "/details": "Tool result details", "/exit": "Exit",
 }
 
 
@@ -71,4 +71,4 @@ class TerminalInput:
     def read(self, session_id: str) -> str:
         if self.session is None:
             return input("❯ ")
-        return self.session.prompt(bottom_toolbar=[("class:bottom-toolbar", f" {session_id[:8]}  ·  Enter 发送  ·  Ctrl+J 换行  ·  /help")])
+        return self.session.prompt(bottom_toolbar=[("class:bottom-toolbar", f" {session_id[:8]}  ·  Enter send  ·  Ctrl+J newline  ·  /help")])

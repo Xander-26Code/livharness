@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -12,13 +13,70 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 from rich.console import Console
 
-from tui.app import close_pending_tools, run_app
+from tui.app import close_pending_tools, resolve_resume_id, run_app
+from session import QueryEngine, get_session_title, list_sessions
 from tui.demo import show_demo
 from tui.input import CommandCompleter, input_bindings
 from tui.render import TerminalUI
 
 
 class TestTerminalUI(unittest.TestCase):
+    def test_session_titles_and_unreadable_files(self):
+        self.assertEqual(get_session_title([]), "New conversation")
+        self.assertEqual(get_session_title([
+            {"role": "system", "content": "ignore"},
+            {"role": "user", "content": "  "},
+            {"role": "user", "content": "解释\n  [red] 标签"},
+        ]), "解释 [red] 标签")
+        with TemporaryDirectory() as directory:
+            QueryEngine('topic', directory).save_messages([{'role': 'user', 'content': '解释 [red] 标签'}])
+            QueryEngine('empty', directory).save_messages([])
+            Path(directory, 'broken_messages.json').write_text('{broken')
+            Path(directory, 'invalid_messages.json').write_text('{}')
+            for selectable in (True, False):
+                with self.subTest(selectable=selectable):
+                    output = StringIO()
+                    ui = TerminalUI(console=Console(file=output, width=100, color_system=None))
+                    ui.sessions(['topic', 'empty', 'broken', 'invalid', 'missing'], directory, selectable=selectable)
+                    text = output.getvalue()
+                    self.assertIn('解释 [red] 标签', text)
+                    self.assertIn('New conversation', text)
+                    self.assertEqual(text.count('Unable to read this session'), 3)
+                    self.assertIn('#' if selectable else 'SESSION ID', text)
+
+    def test_resume_number_requires_a_displayed_list_and_valid_range(self):
+        for value, ids in [('1', []), ('0', ['a']), ('2', ['a'])]:
+            with self.subTest(value=value, ids=ids), self.assertRaises(ValueError):
+                resolve_resume_id(value, ids)
+        self.assertEqual(resolve_resume_id('1', ['a', 'b']), 'a')
+        self.assertEqual(resolve_resume_id('full-id', []), 'full-id')
+        self.assertEqual(resolve_resume_id('1' * 32, []), '1' * 32)
+
+    def test_resume_number_uses_displayed_order_even_after_files_change(self):
+        output = StringIO()
+        ui = TerminalUI(console=Console(file=output, width=100, color_system=None), plain=True)
+        with TemporaryDirectory() as directory:
+            for name, updated in [('first', 300), ('second', 200), ('current', 100)]:
+                QueryEngine(name, directory).save_messages([
+                    {'role': 'system', 'content': 'system'}, {'role': 'user', 'content': f'Topic {name}'},
+                ])
+                os.utime(Path(directory, f'{name}_messages.json'), (updated, updated))
+            commands = iter(['/resume', '/resume 1', '/session', '/exit'])
+
+            def read(_session_id):
+                command = next(commands)
+                if command == '/resume 1':
+                    # 展示后另一个会话更新了；用户选择的编号仍应指向原来的第一项。
+                    os.utime(Path(directory, 'second_messages.json'), (500, 500))
+                return command
+
+            with patch('tui.app.TerminalUI', return_value=ui), patch('tui.app.TerminalInput') as reader, patch('tui.app.run_agent') as agent, patch('tui.app.list_sessions', wraps=list_sessions) as listing:
+                reader.return_value.read.side_effect = read
+                run_app(resume_id='current', plain=True, session_dir=directory)
+                listing.assert_called_once_with(directory)
+                agent.assert_not_called()
+            self.assertIn('Session ID: first', output.getvalue())
+
     def test_demo_renders_at_narrow_and_wide_widths_without_api(self):
         for width in (40, 80, 120):
             with self.subTest(width=width):
@@ -29,7 +87,7 @@ class TestTerminalUI(unittest.TestCase):
                 text = output.getvalue()
                 self.assertIn('LivHarness', text)
                 self.assertIn('read_file', text)
-                self.assertIn('离线', text)
+                self.assertIn('Offline', text)
 
     def test_input_accepts_multiline_and_bracketed_paste(self):
         async def check():
@@ -85,7 +143,7 @@ class TestTerminalUI(unittest.TestCase):
             self.assertEqual(messages[-1]['role'], 'tool')
             self.assertEqual(len(messages), 4)
             agent.assert_called_once()
-        self.assertIn('10 次模型请求上限', output.getvalue())
+        self.assertIn('10-request limit', output.getvalue())
         self.assertIn('Session ID:', output.getvalue())
 
     def test_cancel_during_tool_call_returns_to_prompt_and_saves(self):

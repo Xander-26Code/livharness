@@ -109,19 +109,20 @@ python main.py
 | `python main.py --resume SESSION_ID` | 加载历史对话；将 `SESSION_ID` 替换为实际会话 ID |
 | `/help` | 查看命令与快捷键 |
 | `/new` | 新建会话，保留原会话 |
-| `/sessions` 或 `/resume ID` | 查看或切换会话 |
+| `/sessions` 或 `/resume` | 查看带标题和编号的会话列表 |
+| `/resume 编号` 或 `/resume ID` | 按最近展示的列表选择，或使用完整会话 ID |
 | `/session` | 查看当前完整会话 ID |
 | `/details` | 开关后续工具结果的完整 JSON 展示 |
 | `/clear` | 清空当前对话，已经修改的文件不会恢复 |
 | `/exit`、`exit` 或 `quit` | 保存并退出 |
 
-在 `❯` 后输入命令。Enter 发送，Ctrl+J（或先 Esc 再 Enter）换行，方向键浏览输入历史，Tab 补全命令。Ctrl+C 清空输入或停止正在运行的这一轮。停止不会撤销文件修改；没有记录结果的工具需要先核实状态再重试。
+界面提示统一使用英文，对话内容保留原本语言。在 `❯` 后输入命令。Enter 发送，Ctrl+J（或先 Esc 再 Enter）换行，方向键浏览输入历史，Tab 补全命令。Ctrl+C 清空输入或停止正在运行的这一轮。停止不会撤销文件修改；没有记录结果的工具需要先核实状态再重试。
 
 只有调用模型时才需要 API key。帮助、预览和会话命令可离线使用。界面代码放在 [tui/](tui/)，通过 Agent 回调接收回答与执行进度。
 
 ![终端界面离线预览](asset/tui-preview.svg)
 
-*由 `python main.py --demo` 渲染，内容为演示示例，没有调用模型。*
+*英文界面由离线演示渲染，没有调用模型。使用 `python scripts/render_tui_preview.py` 重新生成预览图。*
 
 ## 一起参与
 

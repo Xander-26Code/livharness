@@ -109,19 +109,20 @@ Try: `Read tools/read_file.py and explain what it does.`
 | `python main.py --resume SESSION_ID` | Load a conversation; replace `SESSION_ID` with its actual ID |
 | `/help` | Show commands and keyboard shortcuts |
 | `/new` | Start a new session without deleting the previous one |
-| `/sessions` or `/resume ID` | List sessions or switch to one |
+| `/sessions` or `/resume` | List sessions with conversation titles and selection numbers |
+| `/resume NUMBER` or `/resume ID` | Resume from the last displayed list, or use a full session ID |
 | `/session` | Show the current full session ID |
 | `/details` | Toggle full JSON for subsequent tool results |
 | `/clear` | Clear the current conversation; file changes remain |
 | `/exit`, `exit`, or `quit` | Save and exit |
 
-Type commands at the `❯` prompt. Enter sends; Ctrl+J (or Esc then Enter) inserts a newline; arrow keys browse input history; Tab completes commands. Ctrl+C cancels input or stops the running turn. Stopping does not undo file changes, and a tool with no recorded result must be checked before retrying.
+The interface is in English; conversation content keeps its original language. Type commands at the `❯` prompt. Enter sends; Ctrl+J (or Esc then Enter) inserts a newline; arrow keys browse input history; Tab completes commands. Ctrl+C cancels input or stops the running turn. Stopping does not undo file changes, and a tool with no recorded result must be checked before retrying.
 
 Only model requests require an API key. Help, the demo, and session commands work offline. The UI lives in [tui/](tui/); it receives responses and progress through callbacks from the agent loop.
 
 ![Offline terminal UI preview](asset/tui-preview.svg)
 
-*Rendered from `python main.py --demo`; example content, no model calls.*
+*English UI rendered from the offline demo; example content, no model calls. Regenerate with `python scripts/render_tui_preview.py`.*
 
 ## Contributing
 

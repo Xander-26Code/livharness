@@ -43,12 +43,12 @@ def close_pending_tools(messages: list[ChatCompletionMessageParam]) -> None:
 
 def open_session(session_id: str | None, directory: str):
     if session_id is not None and (not session_id.isascii() or not session_id.replace("_", "").replace("-", "").isalnum()):
-        raise ValueError("会话 ID 只能包含英文字母、数字、下划线和连字符。")
+        raise ValueError("Session IDs may contain only ASCII letters, digits, underscores, and hyphens.")
     session = QueryEngine(session_id=session_id or uuid4().hex, session_dir=directory)
     if session_id:
         messages = session.load_messages(session_id)
         if not isinstance(messages, list) or not all(isinstance(item, dict) and "role" in item for item in messages):
-            raise ValueError("会话文件中的消息格式不正确。")
+            raise ValueError("Invalid message format in the session file.")
         close_pending_tools(messages)
     else:
         messages = [SYSTEM_MESSAGE.copy()]
@@ -61,8 +61,20 @@ def save_session(session: QueryEngine, messages: list, ui: TerminalUI) -> bool:
         session.save_messages(messages)
         return True
     except OSError as exc:
-        ui.notice(f"保存失败：{exc}。对话仍在内存中，请修复目录权限后再继续。", "bad")
+        ui.notice(f"Could not save: {exc}. The conversation is still in memory. Check directory permissions before continuing.", "bad")
         return False
+
+
+def resolve_resume_id(value: str, displayed_ids: list[str]) -> str:
+    """编号只查最近一次展示的列表，不重新排序；32位数字 ID 仍按 ID 处理。"""
+    if value.isascii() and value.isdigit() and len(value) < 32:
+        if not displayed_ids:
+            raise ValueError("Use /sessions first, then /resume NUMBER to choose a session.")
+        index = int(value) - 1
+        if not 0 <= index < len(displayed_ids):
+            raise ValueError(f"Choose a number from 1 to {len(displayed_ids)}, or use /sessions to refresh.")
+        return displayed_ids[index]
+    return value
 
 
 def run_app(resume_id: str | None = None, plain: bool = False, session_dir: str = "sessions") -> None:
@@ -70,29 +82,30 @@ def run_app(resume_id: str | None = None, plain: bool = False, session_dir: str 
     try:
         session, messages = open_session(resume_id, session_dir)
     except (OSError, ValueError) as exc:
-        ui.notice(f"无法打开会话：{exc}", "bad")
+        ui.notice(f"Could not open session: {exc}", "bad")
         return
     reader = TerminalInput(plain=plain)
     reader.set_history(messages)
     ui.welcome(session.session_id, MODEL, resumed=resume_id is not None)
     if resume_id:
         ui.history(messages)
+    displayed_session_ids: list[str] = []
 
     while True:
         try:
             text = reader.read(session.session_id).strip()
         except KeyboardInterrupt:
-            ui.notice("输入已取消。输入 /exit 退出。")
+            ui.notice("Input cancelled. Use /exit to quit.")
             continue
         except EOFError:
             if save_session(session, messages, ui):
-                ui.notice("会话已保存，再见。")
+                ui.notice("Session saved. Goodbye.")
             return
         if not text:
             continue
         if text.lower() in ("exit", "quit", "/exit", "/quit"):
             if save_session(session, messages, ui):
-                ui.notice("会话已保存，再见。")
+                ui.notice("Session saved. Goodbye.")
                 return
             continue
         if text.startswith("/"):
@@ -102,32 +115,30 @@ def run_app(resume_id: str | None = None, plain: bool = False, session_dir: str 
                     ui.help()
                 elif command == "/session":
                     ui.notice(f"Session ID: {session.session_id}")
-                elif command == "/sessions":
-                    ui.sessions(list_sessions(session_dir), session_dir)
+                elif command == "/sessions" or (command == "/resume" and not argument.strip()):
+                    displayed_session_ids = list_sessions(session_dir)
+                    ui.sessions(displayed_session_ids, session_dir, selectable=True)
                 elif command == "/details":
                     ui.details = not ui.details
-                    ui.notice(f"工具详情已{'开启' if ui.details else '关闭'}，从下一次工具调用生效。")
+                    ui.notice(f"Tool details {'enabled' if ui.details else 'disabled'} for subsequent calls.")
                 elif command == "/clear":
                     del messages[1:]
                     save_session(session, messages, ui)
                     reader.set_history(messages)
-                    ui.notice("对话上下文已清空，文件修改保持不变。")
+                    ui.notice("Conversation context cleared. File changes are unchanged.")
                 elif command in ("/new", "/resume"):
-                    if command == "/resume" and not argument.strip():
-                        ui.notice("用法：/resume 会话ID。可先用 /sessions 查看。", "warn")
-                        continue
+                    new_id = resolve_resume_id(argument.strip(), displayed_session_ids) if command == "/resume" else None
                     if not save_session(session, messages, ui):
                         continue
-                    new_id = argument.strip() if command == "/resume" else None
                     session, messages = open_session(new_id, session_dir)
                     reader.set_history(messages)
                     ui.welcome(session.session_id, MODEL, resumed=new_id is not None)
                     if new_id:
                         ui.history(messages)
                 else:
-                    ui.notice("未知命令，输入 /help 查看可用命令。", "warn")
+                    ui.notice("Unknown command. Use /help to see available commands.", "warn")
             except (OSError, ValueError) as exc:
-                ui.notice(f"操作未完成：{exc}", "bad")
+                ui.notice(f"Could not complete the operation: {exc}", "bad")
             continue
 
         ui.user(text)
@@ -142,21 +153,21 @@ def run_app(resume_id: str | None = None, plain: bool = False, session_dir: str 
             status = "interrupted"
             close_pending_tools(messages)
         except AuthenticationError:
-            error = "API key 验证失败，请检查项目 .env 中的 DEEPSEEK_API_KEY，并重启程序。"
+            error = "Authentication failed. Check DEEPSEEK_API_KEY in .env and restart the app."
         except APIConnectionError:
-            error = "连接模型失败，请检查网络后重试。"
+            error = "Could not connect to the model. Check your network and try again."
         except APIStatusError as exc:
-            error = f"模型服务返回 HTTP {exc.status_code}，本轮已停止。"
+            error = f"The model service returned HTTP {exc.status_code}. This turn has stopped."
         except Exception as exc:
-            error = f"执行失败（{type(exc).__name__}）：{exc}"
+            error = f"Execution failed ({type(exc).__name__}): {exc}"
         if error:
             close_pending_tools(messages)
             ui.notice(error, "bad")
         save_session(session, messages, ui)
         if status == "max_steps":
-            ui.notice(f"已达到本轮 {MAX_STEPS} 次模型请求上限，任务可能尚未完成。可以输入新指令继续。", "warn")
+            ui.notice(f"Reached the {MAX_STEPS}-request limit for this turn. The task may be unfinished. Enter a new instruction to continue.", "warn")
         elif status == "interrupted":
-            ui.notice("本轮已停止。已有文件修改不会撤销；没有返回结果的工具需要先核实执行状态。", "warn")
+            ui.notice("Turn stopped. File changes are not undone. Check tools with missing results before retrying.", "warn")
         elif status == "unsupported_tool":
-            ui.notice("模型请求了暂不支持的工具类型，本轮已停止。", "warn")
+            ui.notice("The model requested an unsupported tool type. This turn has stopped.", "warn")
         ui.turn_end(time.monotonic() - started)

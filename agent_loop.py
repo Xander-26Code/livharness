@@ -23,7 +23,7 @@ def get_client() -> OpenAI:
         load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
         api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
-            raise ValueError("请先在项目的 .env 文件中设置 DEEPSEEK_API_KEY。")
+            raise ValueError("Set DEEPSEEK_API_KEY in the project .env file before sending a message.")
         client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
     return client
 
@@ -38,9 +38,9 @@ def run_agent(
         if on_event is not None:
             on_event(event, data)
         elif event == "tool_start":
-            print(f"[工具调用] {data['tool']}，参数：{data['arguments']}")
+            print(f"[Tool call] {data['tool']}, arguments: {data['arguments']}")
         elif event == "tool_result":
-            print(f"[工具结果] {data}")
+            print(f"[Tool result] {data}")
 
     def record_result(call_id: str, result: ToolResult) -> None:
         result_dict = result.to_dict()

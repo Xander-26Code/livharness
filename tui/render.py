@@ -15,6 +15,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
+from session import QueryEngine, get_session_title
 
 THEME = Theme({
     "accent": "#56d6cf", "spark": "#f2a18b", "muted": "#8a929d",
@@ -40,7 +41,7 @@ class TerminalUI:
         copy = Group(
             title,
             Text("Local tools. Clear steps.", style="muted"),
-            Text(f"{model}  ·  {'继续会话' if resumed else '新会话'} {session_id[:8]}", style="muted"),
+            Text(f"{model}  ·  {'resumed' if resumed else 'new session'} {session_id[:8]}", style="muted"),
             Text(str(Path.cwd()), style="muted", overflow="fold"),
         )
         layout = Table.grid(padding=(0, 1))
@@ -52,7 +53,7 @@ class TerminalUI:
             layout.add_row(copy)
         self.console.print()
         self.console.print(Panel(layout, box=box.ROUNDED, border_style="border", padding=(1, 1)))
-        self.console.print(Text("  输入任务开始  ·  /help 帮助  ·  /sessions 历史会话", style="muted"))
+        self.console.print(Text("  Describe a task to begin  ·  /help  ·  /sessions", style="muted"))
         self.console.print()
 
     def user(self, text: str) -> None:
@@ -68,7 +69,7 @@ class TerminalUI:
             body = Text(text) if self.plain else Markdown(text, code_theme="monokai")
             self.console.print(Padding(body, (0, 2)))
         else:
-            self.notice("模型没有返回文字。", "warn")
+            self.notice("The model returned no text.", "warn")
         self.console.print()
 
     def notice(self, text: str, style: str = "muted") -> None:
@@ -79,7 +80,7 @@ class TerminalUI:
         self.steps = 0
         self.tool_count = 0
         if self.console.is_terminal and not self.plain:
-            self._status = self.console.status(Text("正在连接模型…", style="muted"), spinner="dots", spinner_style="accent")
+            self._status = self.console.status(Text("Connecting to the model…", style="muted"), spinner="dots", spinner_style="accent")
             self._status.start()
         try:
             yield
@@ -91,7 +92,7 @@ class TerminalUI:
     def event(self, name: str, data: dict) -> None:
         if name == "model_start":
             self.steps = data["step"]
-            label = Text(f"模型处理中  ·  {self.steps}/{data['max_steps']} 轮  ·  Ctrl+C 停止", style="muted")
+            label = Text(f"Working  ·  step {self.steps}/{data['max_steps']}  ·  Ctrl+C to stop", style="muted")
             if self._status:
                 self._status.update(label)
         elif name == "tool_start":
@@ -103,7 +104,7 @@ class TerminalUI:
             row.append(arguments, style="muted")
             self.console.print(row)
             if self._status:
-                self._status.update(Text(f"正在执行 {data['tool']}  ·  Ctrl+C 停止", style="muted"))
+                self._status.update(Text(f"Running {data['tool']}  ·  Ctrl+C to stop", style="muted"))
         elif name == "tool_result":
             ok = data["status"] == "success"
             summary = " ".join(str(data["summary"]).split())[:180]
@@ -113,51 +114,71 @@ class TerminalUI:
             if self.details:
                 self.console.print(Panel(
                     Syntax(json.dumps(data, ensure_ascii=False, indent=2), "json", word_wrap=True, background_color="default"),
-                    title=Text("工具结果", style="muted"), border_style="border",
+                    title=Text("Tool result", style="muted"), border_style="border",
                 ))
 
     def turn_end(self, elapsed: float) -> None:
-        self.notice(f"{elapsed:.1f}s  ·  {self.steps} 轮模型请求  ·  {self.tool_count} 次工具调用")
+        self.notice(f"{elapsed:.1f}s  ·  {self.steps} model requests  ·  {self.tool_count} tool calls")
         self.console.print()
 
     def help(self) -> None:
         rows = [
-            ("/help", "查看帮助"), ("/new", "创建新会话，保留原会话"),
-            ("/sessions", "查看会话列表，最近更新的在前"),
-            ("/resume ID", "切换到指定会话"), ("/session", "查看当前会话 ID"),
-            ("/clear", "清空当前对话上下文，不撤销文件修改"),
-            ("/details", "开关后续工具结果的完整 JSON 展示"),
-            ("/exit", "退出；也支持 exit、quit、Ctrl+D"),
+            ("/help", "Show help"), ("/new", "Start a new session; keep the previous one"),
+            ("/sessions", "List sessions, most recently updated first"),
+            ("/resume NUMBER|ID", "Resume a session; omit the argument to list sessions"), ("/session", "Show the full current session ID"),
+            ("/clear", "Clear conversation context; keep file changes"),
+            ("/details", "Toggle full JSON for subsequent tool results"),
+            ("/exit", "Save and exit; also exit, quit, or Ctrl+D"),
         ]
         table = Table.grid(padding=(0, 3))
         table.add_column(style="accent")
         table.add_column()
         for command, description in rows:
             table.add_row(command, description)
-        self.console.print(Panel(table, title="帮助", border_style="border"))
-        self.notice("Enter 发送 · Ctrl+J 或 Esc 后 Enter 换行 · ↑/↓ 输入历史 · Tab 补全命令")
-        self.notice("输入时 Ctrl+C 清空输入；执行时 Ctrl+C 停止本轮。停止不会撤销已经完成的文件修改。")
+        self.console.print(Panel(table, title="Help", border_style="border"))
+        self.notice("Enter send · Ctrl+J or Esc then Enter newline · ↑/↓ history · Tab complete")
+        self.notice("Ctrl+C cancels input or stops the current turn. Completed file changes are not undone.")
 
-    def sessions(self, session_ids: list[str], directory: str) -> None:
+    def sessions(self, session_ids: list[str], directory: str, selectable: bool = False) -> None:
         if not session_ids:
-            self.notice("还没有保存的会话。")
+            self.notice("No saved sessions yet.")
             return
         table = Table(box=box.SIMPLE, header_style="muted", padding=(0, 1))
-        table.add_column("最近更新")
-        table.add_column("SESSION ID", style="accent", overflow="fold")
-        for session_id in session_ids:
+        if selectable:
+            table.add_column("#", style="accent", no_wrap=True)
+        table.add_column("UPDATED", no_wrap=True)
+        table.add_column("CONVERSATION", style="accent", overflow="fold")
+        if not selectable:
+            table.add_column("SESSION ID", style="muted", overflow="fold")
+        for index, session_id in enumerate(session_ids, start=1):
             path = Path(directory) / f"{session_id}_messages.json"
-            timestamp = datetime.fromtimestamp(path.stat().st_mtime).strftime("%m-%d %H:%M")
-            table.add_row(timestamp, session_id)
+            timestamp = "—"
+            try:
+                timestamp = datetime.fromtimestamp(path.stat().st_mtime).strftime("%m-%d %H:%M")
+                messages = QueryEngine(session_id, directory).load_messages(session_id)
+                if not isinstance(messages, list) or not all(isinstance(m, dict) and "role" in m for m in messages):
+                    raise ValueError("Invalid session message format")
+                title = get_session_title(messages)
+            except (OSError, ValueError):
+                title = "Unable to read this session"
+            # 用户的标题按普通文字显示，避免 [red] 等内容被当作 Rich 标记。
+            if selectable:
+                table.add_row(str(index), timestamp, Text(title))
+            else:
+                table.add_row(timestamp, Text(title), session_id)
         self.console.print(table)
-        self.notice("输入 /resume ID 继续其中一个会话。")
+        if selectable:
+            self.notice("Use /resume 1 to continue the first session, or /resume FULL_ID.")
+            self.notice("Numbers refer to this list. Use /sessions to refresh.")
+        else:
+            self.notice("Run python main.py --resume FULL_ID to continue a session.")
 
     def history(self, messages: list) -> None:
         # 展示最近几条文字；全部消息仍会传给模型。
         visible = [m for m in messages if m["role"] in ("user", "assistant") and isinstance(m.get("content"), str) and m["content"]]
         if not visible:
             return
-        self.notice("最近的对话 · 已恢复完整历史")
+        self.notice("Recent conversation · full history restored")
         for message in visible[-4:]:
             if message["role"] == "user":
                 self.user(message["content"])
