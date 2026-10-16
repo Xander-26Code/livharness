@@ -27,6 +27,7 @@ This file records implemented changes. No formal version has been released yet, 
 
 ### Changed
 
+- Defined the v0.3 plan in both READMEs: traceable criteria, checks tied to artifact versions, a separate system report, and four configuration-edit acceptance cases. Verification is not implemented yet; v0.4 remains focused on context management, with adaptive verification reserved for later research.
 - The agent loop now consumes DeepSeek Chat Completions streams, assembles text and tool calls, and preserves reasoning content for subsequent requests. Tool execution waits for the expected finish reason.
 - Updated both READMEs and the contribution guide to reflect the completed v0.2 milestone and testing workflow.
 - Standardized terminal prompts, help, and status messages in English; refreshed the README preview.
@@ -66,6 +67,7 @@ Task verification and state-aware context management are **not implemented yet**
 
 #### 调整
 
+- 在中英文 README 中确定 v0.3 方案：有来源的验收条件、关联产物版本的检查、独立的系统报告和四种配置修改验收案例。验收机制尚未实现；v0.4 保留上下文管理目标，自适应验证列为后续研究。
 - Agent 循环接收 DeepSeek Chat Completions 流式响应，拼接文字和工具调用，并保留后续请求所需的思考内容；确认结束原因符合预期后才执行工具。
 - 同步更新中英文 README 和贡献指南，说明 v0.2 阶段完成情况与测试方法。
 - 终端提示、帮助和状态信息统一使用英文，并更新 README 预览图。

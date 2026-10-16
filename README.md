@@ -4,19 +4,21 @@
 
 [English](README.md) | [简体中文](README_ZH.md)
 
-**Helping agents check their work and stay focused on current goals and constraints throughout long tasks.**
+**An experimental agent harness working toward completion reports backed by checks and evidence.**
 
 LivHarness is a small Python project that connects a language model to tools and manages how it carries out a task.
 
-> **Early development · v0.2 core features complete, not yet released.** The project now has a streaming terminal UI, structured tool results, file tools, and saved conversations. The two goals below are what we are building toward.
+> **Early development · v0.2 core features complete, not yet released.** Streaming, file tools, structured tool results, and saved conversations work today. We are starting v0.3: recording what was actually checked, what failed, and what remains unknown. Verification is not implemented yet.
 
 ## What We Want to Build
 
-### 1. Check the work — Verified Agent Execution
+### 1. Make completion claims checkable — Verified Agent Execution
 
-Before an important action, check that it is safe to proceed with the expected inputs. Afterward, check whether the result meets the task's requirements.
+An agent saying “done” is not enough. We want the harness to record the requirements, run checks against the actual result, and show the evidence behind each verification status.
 
-For example, after changing a configuration file, verify that it still opens correctly and contains the requested value. When something has not been checked, say so clearly.
+For example, if the user asks to change a port to `8080` without changing other settings, checking the port alone is insufficient. The harness should also compare the remaining settings and report any unintended change.
+
+The system cannot automatically know the correct standard for every task. Each check needs an explicit scope and source. A model may suggest a check, but its suggestion is not automatically a user requirement or proof of success. When evidence is missing, the result should remain unverified.
 
 ### 2. Stay on track during long tasks — State-Aware Context Engineering
 
@@ -50,13 +52,48 @@ Each version has a concrete set of features to deliver. These are development ta
 | --- | --- | --- | --- |
 | **v0.1** | Basic harness | Model calls, tool registration and execution, file tools, conversation history, session saving and loading | Core features implemented |
 | **v0.2** | Terminal interface and tool results | A scrolling TUI with streaming answers, Markdown, tool logs, session selection, and interruption handling; structured results with success/failure, content, and error details | Core features complete; not yet released |
-| **v0.3** | Check the work | Check conditions before important actions, verify results afterward, and record what passed, failed, or remains unverified | Planned |
+| **v0.3** | Evidence for completion | Record requirements and their sources; run checks on local file results; tie evidence to artifact versions; separate system verification reports from model replies | Current development target; design defined, implementation pending |
 | **v0.4** | Stay on track | Follow updated goals, preserve constraints and unresolved errors, refresh outdated file information, and reduce unnecessary history | Planned |
 | **v1.0** | Bring it together | Combine the interface, tools, verification, and context management for local tasks; add repeatable evaluations and document supported behavior | Planned |
 
-The v0.2 milestone is complete; the next development target is v0.3: checking task results. The project is still experimental, and broader tests and terminal compatibility checks are welcome. Reliable crash recovery remains a later improvement, to be scoped when long tasks such as batch processing need it.
+The v0.2 milestone is complete. Our current focus is the v0.3 scope below; v0.4 remains focused on context management. Reliable crash recovery is a later improvement, to be scoped when long tasks such as batch processing need it.
 
-We plan to compare versions on the same tasks and model, measuring actual success, incorrect completion claims, adherence to updated requirements, time, and token usage. There are no benchmark results yet.
+## v0.3: What We Will Build First
+
+**Goal:** Check registered requirements with a recorded basis, and produce a system report limited to what the evidence supports. This is a development plan, not a description of current features.
+
+We will start with local file and configuration edits. For the first experiments, criteria will be specified in advance by the user or task author. Automatic discovery of criteria is a later research step.
+
+| Record | What it keeps |
+| --- | --- |
+| Task | The original request and subsequent changes |
+| Criterion | What to check, its source, and whether it has been accepted for this task |
+| Check record | The check that ran, its observations, and the versions of the criterion and relevant files |
+| System report | Which checks passed, failed, or remain unverified, with links to their evidence |
+
+The first implementation must follow these rules:
+
+- **Keep requirements traceable.** Preserve the original request and changes. A model must not silently delete a requirement or label its own proposal as user-approved. A real source does not guarantee that its interpretation is correct; ambiguity remains explicit until resolved.
+- **Run checks through the harness.** Check records come from actual checker executions. A tool's success flag or a model-written `passed` value is not verification evidence.
+- **Keep evidence current.** Bind results to the checked criteria and files. If either changes, require a new check. A file fingerprint detects changes; it does not prove that a criterion is correct or capture the whole environment.
+- **Separate reporting from generation.** Use program rules to produce the system report, displayed separately from the model's streamed reply. Passing all registered checks only establishes that checked scope, not that every possible requirement was discovered or met.
+
+The first milestone is a configuration-edit task with four acceptance cases:
+
+1. The requested value changes and other settings remain unchanged: checks pass.
+2. The tool reports success but leaves the file unchanged: the result fails the check.
+3. The requested value changes, but unrelated settings also change: the preservation check fails.
+4. The file changes after a successful check: the old result no longer verifies the current file.
+
+Missing checks, unreadable files, and unresolved criteria must remain unverified with a reason. Start with ordinary Python modules and deterministic file checks; multiple verifier agents are not required for this milestone.
+
+## Research After the First Verification Loop
+
+We want to investigate how a harness can discover useful candidate criteria from task context, tests, and documentation; search for counterexamples; and choose worthwhile checks within a budget. These are experiments without committed version numbers or proven gains. They build on the verification records above and the context work planned for v0.4.
+
+Related work includes [VeriHarness](https://arxiv.org/abs/2610.00972), [LLM-generated test oracles](https://arxiv.org/abs/2607.10277), and [LEDGER](https://arxiv.org/abs/2608.18398). Our proposed combination is a research direction, not an established originality or performance claim.
+
+We plan to compare a basic agent loop, fixed checks, and later adaptive checks using the same tasks, model, and comparable budgets. Evaluation should use independently prepared criteria unavailable to the agent, and measure actual task success, incorrect completion claims, missed valid completions, unresolved outcomes, and time/token cost. Always reporting “unknown” must not count as success. There are no benchmark results yet.
 
 ## Changelog
 
@@ -132,7 +169,7 @@ Help us build one small, working improvement at a time:
 
 - **Getting started:** Improve documentation, report a reproducible bug, or add a file-tool test.
 - **Terminal experience:** Test streaming, long answers, and interruption in different terminals; improve tool-result presentation.
-- **v0.3 — Checking work:** Help define what success means and how to check it.
+- **v0.3 — Checking work:** Build criterion and evidence records, file checkers, and the four acceptance cases above; help present verification separately from model replies.
 - **Context:** Create cases where the agent must follow a new requirement, remember a constraint, or notice a changed file.
 
 The current suite has 21 automated tests covering editing, sessions, invalid tool-call JSON, the model-call limit, streaming text and tool parameters, truncated responses, and TUI input, display, and interruption. After installing the project dependencies, run them from the repository root; no API key or real model calls are needed:
