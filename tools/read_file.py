@@ -1,9 +1,10 @@
 from tool_result import ToolResult, ToolError
 
+MAX_TEXT_CHARACTERS = 100_000
 
 def read_file(file_path) -> ToolResult:
     """
-    Reads the content of a file and returns it as a string.
+    Read a small UTF-8 text file and return a structured result.
 
     Args:
         file_path (str): The path to the file to be read.
@@ -22,7 +23,12 @@ def read_file(file_path) -> ToolResult:
         )
     try: 
         with open(file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
+            content = file.read(MAX_TEXT_CHARACTERS + 1)
+        if len(content) > MAX_TEXT_CHARACTERS:
+            return ToolResult(
+                tool="read_file", status="error", summary="File is too large",
+                data={}, error=ToolError("FILE_TOO_LARGE", f"Limit: {MAX_TEXT_CHARACTERS} characters. Split the file before reading; no partial content was returned."),
+            )
         return ToolResult(
             tool="read_file",
             status="success",
@@ -77,4 +83,9 @@ def read_file(file_path) -> ToolResult:
                 message=f"The file at path '{file_path}' could not be decoded. It may not be a text file.",
                 retryable=False
             )
+        )
+    except (OSError, ValueError) as error:
+        return ToolResult(
+            tool="read_file", status="error", summary="Could not read file",
+            data={}, error=ToolError("FILE_READ_ERROR", str(error)),
         )

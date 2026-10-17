@@ -19,7 +19,7 @@ tools: list[ChatCompletionToolParam] = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "读取本地文本文件的内容。",
+            "description": "读取本地 UTF-8 文本文件，最多 100000 字符；超出限制返回错误，不返回部分内容。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -99,7 +99,7 @@ tools: list[ChatCompletionToolParam] = [
         "type": "function",
         "function": {
             "name": "pdf_read",
-            "description": "读取本地 PDF 文件的所有页面，提取文字并返回合并后的文本。不支持扫描图片的 OCR 或图片内容理解，不保证保留表格的行列结构。",
+            "description": "读取本地未加密 PDF 的文字，最多 100 页、100000 字符；超限返回错误。不支持 OCR 或图片理解，不保证保留表格结构。",
             "parameters": {
                 "type": "object",
                 "properties": {

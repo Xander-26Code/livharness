@@ -20,11 +20,11 @@ def get_client() -> OpenAI:
     """只在发送模型请求时读取配置，帮助、预览和会话列表可以离线使用。"""
     global client
     if client is None:
-        load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
+        load_dotenv(Path(__file__).resolve().parent / ".env")
         api_key = os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             raise ValueError("Set DEEPSEEK_API_KEY in the project .env file before sending a message.")
-        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=60.0, max_retries=1)
     return client
 
 
@@ -110,6 +110,11 @@ def run_agent(
             expected_reason = "stop"
         if finish_reason != expected_reason:
             raise RuntimeError(f"Unexpected finish reason: {finish_reason}, expected: {expected_reason}")
+        call_ids = [call["id"] for call in tool_calls.values()]
+        if len(set(call_ids)) != len(call_ids) or any(
+            not call["id"] or not call["function"]["name"] for call in tool_calls.values()
+        ):
+            raise RuntimeError("The model returned missing or duplicate tool call IDs, or a missing tool name.")
         message = ChatCompletionMessage.model_validate(
             {
                 "role": "assistant",
@@ -147,6 +152,12 @@ def run_agent(
                     )
                     record_result(tool_call.id, result)
                     continue
+                if not isinstance(arguments, dict):
+                    record_result(tool_call.id, ToolResult(
+                        tool=tool_name, status="error", summary="Tool arguments must be an object",
+                        data={}, error=ToolError("INVALID_TOOL_ARGUMENTS", "Use a JSON object with named arguments, not a list, string, or null."),
+                    ))
+                    continue
                 emit("tool_start", {"tool": tool_name, "arguments": arguments})
                 function = tool_functions.get(tool_name)
                 if function is None:
@@ -175,6 +186,20 @@ def run_agent(
                                 message=f"Tool '{tool_name}' raised TypeError: {e}",
                                 retryable=False
                             ),
+                        )
+                    except Exception as e:
+                        # 工具失败也必须有对应的结果；KeyboardInterrupt 不在此捕获。
+                        result = ToolResult(
+                            tool=tool_name, status="error", summary="Tool execution failed",
+                            data={}, error=ToolError(
+                                "TOOL_EXECUTION_ERROR",
+                                f"{type(e).__name__}: {e}. Changes may have occurred; inspect the current state before retrying.",
+                            ),
+                        )
+                    if not isinstance(result, ToolResult):
+                        result = ToolResult(
+                            tool=tool_name, status="error", summary="Invalid tool result",
+                            data={}, error=ToolError("INVALID_TOOL_RESULT", "The tool must return ToolResult. Its effects are unknown; inspect before retrying."),
                         )
                 record_result(tool_call.id, result)
         else:

@@ -1,6 +1,10 @@
 
 from pypdf import PdfReader
+from pypdf.errors import PyPdfError
 from tool_result import ToolError, ToolResult
+
+MAX_PDF_PAGES = 100
+MAX_PDF_CHARACTERS = 100_000
 def pdf_read(file_path) -> ToolResult:
     """
     Reads the content of a PDF file and returns it as a string.
@@ -21,7 +25,30 @@ def pdf_read(file_path) -> ToolResult:
             )
         )
     try:
-        reader = PdfReader(file_path)
+        # 用 with 关闭文件；解析和提取时的异常都在同一个 try 内处理。
+        with open(file_path, "rb") as file:
+            reader = PdfReader(file)
+            if reader.is_encrypted:
+                return ToolResult(
+                    tool="pdf_read", status="error", summary="Encrypted PDF is unsupported",
+                    data={}, error=ToolError("ENCRYPTED_PDF", "Use an unencrypted copy of the PDF."),
+                )
+            if len(reader.pages) > MAX_PDF_PAGES:
+                return ToolResult(
+                    tool="pdf_read", status="error", summary="PDF has too many pages",
+                    data={}, error=ToolError("PDF_TOO_LARGE", f"Limit: {MAX_PDF_PAGES} pages. Split the PDF first."),
+                )
+            content = []
+            total = 0
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                total += len(page_text) + (1 if content else 0)
+                if total > MAX_PDF_CHARACTERS:
+                    return ToolResult(
+                        tool="pdf_read", status="error", summary="PDF text is too large",
+                        data={}, error=ToolError("PDF_TOO_LARGE", f"Limit: {MAX_PDF_CHARACTERS} characters. Split the PDF first; no partial content was returned."),
+                    )
+                content.append(page_text)
     except FileNotFoundError:
         return ToolResult(
             tool="pdf_read",
@@ -59,10 +86,11 @@ def pdf_read(file_path) -> ToolResult:
             )
         )
 
-    content = []
-
-    for page in reader.pages:
-        content.append(page.extract_text())
+    except (PyPdfError, OSError, ValueError) as error:
+        return ToolResult(
+            tool="pdf_read", status="error", summary="Could not parse PDF",
+            data={}, error=ToolError("PDF_READ_ERROR", str(error)),
+        )
 
     text = "\n".join(content)
 

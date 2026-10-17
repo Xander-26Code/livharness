@@ -13,7 +13,7 @@ def main(resume_id: str | None = None, plain: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LivHarness — local tools, clear steps.")
+    parser = argparse.ArgumentParser(description="LivHarness — a basic agent harness for learning.")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--resume", metavar="SESSION_ID", help="Continue a saved conversation")
     mode.add_argument("--list-sessions", action="store_true", help="List sessions, most recently updated first")

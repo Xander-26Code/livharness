@@ -2,11 +2,22 @@
 
 [English](#unreleased) | [简体中文](#简体中文) · [Back to README](README.md)
 
-This file records implemented changes. No formal version has been released yet, so the existing prototype and documentation updates are grouped under **Unreleased**. Future features are listed in the [roadmap](README.md#roadmap).
+This file records implemented changes. No formal version has been released yet, so the existing prototype and documentation updates are grouped under **Unreleased**. The project is now a beginner learning reference; the earlier product roadmap is paused.
 
 ## Unreleased
 
 **v0.2 milestone:** Core terminal UI and structured tool-result features are complete. A formal release has not been published.
+
+### Learning-edition wrap-up
+
+- Adopted the MIT License with copyright attribution to Xander and updated the README and contribution guide.
+- Repositioned the English and Chinese READMEs as a basic Python harness for beginners, with a source-reading guide, setup instructions, and explicit limitations. Paused the previous v0.3/v0.4 roadmap and aligned the contribution guide.
+- Added `.env.example`; existing environment variables now take precedence over `.env`. Model requests use a 60-second timeout and at most one SDK retry.
+- Save sessions and edited text through a temporary file and replacement, preserving existing file permissions. Failed replacement leaves the original file intact; this is not full crash recovery or concurrent-write protection.
+- Validate session IDs and loaded message structure before restoring history.
+- Return structured errors for non-object tool arguments, unexpected tool exceptions, and invalid result types. Reject missing or duplicate tool-call IDs before execution.
+- Handle unreadable/encrypted PDFs and cap text reads at 100,000 characters; PDF reads are limited to 100 pages and 100,000 extracted characters. Oversized reads fail explicitly.
+- Added regression tests for these failure paths.
 
 ### Added
 
@@ -36,17 +47,28 @@ This file records implemented changes. No formal version has been released yet, 
 - Simplified the project goals to focus on checking task results and keeping track of current goals and constraints during long tasks.
 - Updated the roadmap: v0.1 covers the basic harness; v0.2 delivers a terminal UI and structured tool results, followed by verification and context management.
 
-Task verification and state-aware context management are **not implemented yet**. They remain the v0.3 and v0.4 goals. Reliable crash recovery is also future work; session loading currently restores saved messages.
+Task verification, state-aware context management, and reliable task recovery are **not implemented**. The earlier v0.3/v0.4 plans below describe past planning and are now paused; session loading restores saved messages only.
 
 ## 简体中文
 
 [返回中文 README](README_ZH.md)
 
-本文件记录已经完成的改动。目前尚未正式发布版本，已有原型和文档更新统一归入「未发布」。未来计划请看[版本路线图](README_ZH.md#版本路线图)。
+本文件记录已经完成的改动。目前尚未正式发布版本，已有原型和文档更新统一归入「未发布」。项目现定位为初学者学习参考，原产品路线已暂停。
 
 ### 未发布
 
 **v0.2 阶段目标：**终端界面与结构化工具结果的核心功能已完成，尚未正式发布版本。
+
+#### 基础学习版收尾
+
+- 采用 MIT 许可证，版权署名为 Xander，并同步 README 和贡献指南。
+- 中英文 README 改为面向初学者的 Python Harness 基础框架，补充源码阅读顺序、安装步骤和限制；暂停原 v0.3/v0.4 路线，并同步贡献指南。
+- 增加 `.env.example`；已有环境变量优先于 `.env`。模型请求使用 60 秒超时，SDK 最多重试一次。
+- 会话和文本编辑先写临时文件，再替换目标，保留已有文件权限。替换失败时原文件保持不变；这不等于完整的崩溃恢复或并发写入保护。
+- 恢复会话前检查 ID 和消息结构。
+- 非对象工具参数、工具异常和错误返回类型变为结构化错误；缺少或重复调用 ID 时不执行工具。
+- 处理无法解析或加密的 PDF；文本读取限制为 100000 字符，PDF 限制为 100 页和 100000 个提取字符，超限明确报错。
+- 为这些失败场景增加回归测试。
 
 #### 新增
 
@@ -76,4 +98,4 @@ Task verification and state-aware context management are **not implemented yet**
 - 简化项目目标，聚焦任务结果检查，以及在长任务中跟进当前目标和重要限制。
 - 更新版本路线图：v0.1 完成基础 harness，v0.2 实现终端界面和结构化工具结果，之后推进结果检查与上下文管理。
 
-任务验收和状态感知上下文管理**尚未实现**，分别保留为 v0.3 和 v0.4 的目标。可靠的崩溃恢复也是后续工作，目前加载会话恢复的是已保存的消息。
+任务验收、状态感知上下文管理和可靠的任务恢复均**尚未实现**。上面的 v0.3/v0.4 内容记录的是过去的规划，现已暂停；加载会话只恢复已保存的消息。

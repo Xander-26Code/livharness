@@ -1,5 +1,6 @@
 from pathlib import Path
 from tool_result import ToolError, ToolResult
+from file_io import atomic_write_text
 
 def edit_file(file_path: str, old_text: str, new_text: str) -> ToolResult:
     if not isinstance(file_path, str):
@@ -76,8 +77,7 @@ def edit_file(file_path: str, old_text: str, new_text: str) -> ToolResult:
 
         updated_content = content.replace(old_text, new_text, 1)
 
-        with open(path, "w", encoding="utf-8", newline="") as file:
-            file.write(updated_content)
+        atomic_write_text(path, updated_content)
 
         return ToolResult(
             tool="edit_file",

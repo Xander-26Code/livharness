@@ -90,7 +90,7 @@ class TerminalUI:
         logo = Text("  ▝▚           \n", style="spark")
         logo.append("    ▄████▄     \n   ██    ██    \n   ██ ▄  ██    \n    ▀████▀     ", style="accent")
         title = Text("LivHarness", style="bold accent")
-        title.append("  /  early development", style="muted")
+        title.append("  /  learning edition", style="muted")
         copy = Group(
             title,
             Text("Local tools. Clear steps.", style="muted"),
